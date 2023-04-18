@@ -6,3 +6,38 @@ $accessToken = Invoke-RestMethod -Method Get -Headers @{'Metadata'='true'} `
 $userProfile = Invoke-RestMethod -Method Get `
   -Headers @{'Authorization'="Bearer $accessToken"} `
   -Uri "https://graph.microsoft.com/v1.0/me"
+
+
+
+function Get-AccessToken {
+    param (
+        [string]$resourceURI = "https://graph.microsoft.com"
+    )
+
+    $AzureContext = (Get-AzContext).Account
+    $token = $AzureContext.GetAccessToken($resourceURI)
+
+    return $token.Token
+}
+
+$accessToken = Get-AccessToken
+$authHeader = @{
+    "Content-Type"  = "application/json"
+    "Authorization" = "Bearer $accessToken"
+}
+
+$graphEndpoint = "https://graph.microsoft.com/v1.0/domains"
+$response = Invoke-RestMethod -Method GET -Uri $graphEndpoint -Headers $authHeader
+$response.value
+
+
+
+
+$domainId = "<domain_id>" # Replace with the domain id of the domain you want to update
+$updateGraphEndpoint = "https://graph.microsoft.com/v1.0/domains/$domainId"
+
+$body = @{
+    isDefault = $true # Set to true or false depending on your requirement
+} | ConvertTo-Json
+
+Invoke-RestMethod -Method PATCH -Uri $updateGraphEndpoint -Headers $authHeader -Body $body
