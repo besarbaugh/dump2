@@ -1,0 +1,8 @@
+$accessToken = Invoke-RestMethod -Method Get -Headers @{'Metadata'='true'} `
+  -Uri "http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://graph.microsoft.com" `
+  | Select-Object -ExpandProperty access_token
+
+
+$userProfile = Invoke-RestMethod -Method Get `
+  -Headers @{'Authorization'="Bearer $accessToken"} `
+  -Uri "https://graph.microsoft.com/v1.0/me"
