@@ -41,3 +41,53 @@ $body = @{
 } | ConvertTo-Json
 
 Invoke-RestMethod -Method PATCH -Uri $updateGraphEndpoint -Headers $authHeader -Body $body
+
+
+function Get-AccessToken {
+    param (
+        [string]$resourceURI = "https://graph.microsoft.com"
+    )
+
+    $AzureContext = (Get-AzContext).Account
+    $token = $AzureContext.GetAccessToken($resourceURI)
+
+    return $token.Token
+}
+
+$accessToken = Get-AccessToken
+$authHeader = @{
+    "Content-Type"  = "application/json"
+    "Authorization" = "Bearer $accessToken"
+}
+
+$graphEndpoint = "https://graph.microsoft.com/v1.0/domains"
+$response = Invoke-RestMethod -Method GET -Uri $graphEndpoint -Headers $authHeader
+$response.value
+
+
+------------------
+
+
+# Get the credentials from the encrypted automation variable
+$credentials = Get-AutomationPSCredential -Name "your-automation-variable-name"
+
+# Define the required variables
+$tenantId = "your-tenant-id"
+$scope = "https://graph.microsoft.com/.default"
+$username = $credentials.UserName
+$password = $credentials.GetNetworkCredential().Password
+
+# Authenticate with Azure AD and get an access token for the Microsoft Graph API
+Connect-AzureAD -Credential $credentials
+$accessToken = (Get-AzureADAccessToken -ResourceUrl "https://graph.microsoft.com" -Scope $scope).AccessToken
+
+# Use the acquired token to make REST API calls to the Microsoft Graph API or any other API that requires authentication
+$authHeader = @{
+    'Authorization' = "Bearer $accessToken"
+    'Content-Type' = 'application/json'
+}
+
+$domainFederationUrl = "https://graph.microsoft.com/v1.0/domains/federationSettings"
+$domainFederationResult = Invoke-RestMethod -Uri $domainFederationUrl -Headers $authHeader -Method Get
+$domainFederationResult
+
