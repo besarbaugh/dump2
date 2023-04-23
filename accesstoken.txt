@@ -118,4 +118,42 @@ $domainFederationUrl = "https://graph.microsoft.com/v1.0/domains/federationSetti
 $domainFederationResult = Invoke-RestMethod -Uri $domainFederationUrl -Headers $authHeader -Method Get
 $domainFederationResult
 
+-----------------------------------------------
+
+# Get the credentials from the encrypted automation variable
+$credentials = Get-AutomationPSCredential -Name "your-automation-variable-name"
+
+# Define the required variables
+$tenantId = "your-tenant-id"
+$scope = "https://graph.microsoft.com/.default"
+$username = $credentials.UserName
+$password = $credentials.GetNetworkCredential().Password
+$tokenEndpoint = "https://login.microsoftonline.com/$tenantId/oauth2/v2.0/token"
+
+# Create the request body with grant type, scope, username, and password
+$body = @{
+    'grant_type' = 'password'
+    'scope' = $scope
+    'username' = $username
+    'password' = $password
+}
+
+# Make the request to the token endpoint to obtain an access token
+$tokenResponse = Invoke-RestMethod -Uri $tokenEndpoint -Method Post -Body $body
+
+# Extract the access token from the token response
+$accessToken = $tokenResponse.access_token
+
+# Use the acquired token to make REST API calls to the Microsoft Graph API or any other API that requires authentication
+$authHeader = @{
+    'Authorization' = "Bearer $accessToken"
+    'Content-Type' = 'application/json'
+}
+
+$domainFederationUrl = "https://graph.microsoft.com/v1.0/domains/federationSettings"
+$domainFederationResult = Invoke-RestMethod -Uri $domainFederationUrl -Headers $authHeader -Method Get
+$domainFederationResult
+
+
+
 
