@@ -1,3 +1,31 @@
+# Get the username and password from your Azure Automation account
+$username = "<your-username>"
+$password = Get-AutomationVariable -Name "your-password-name" | ConvertTo-SecureString -AsPlainText -Force
+$credential = New-Object System.Management.Automation.PSCredential ($username, $password)
+
+# Construct the authorization header
+$encodedCredential = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($credential.UserName + ":" + $credential.GetNetworkCredential().Password))
+$authHeader = @{
+    Authorization = "Basic $encodedCredential"
+}
+
+# Construct the token request body
+$body = @{
+    grant_type = "password"
+    scope = "https://graph.microsoft.com/.default"
+    username = $credential.UserName
+    password = $credential.GetNetworkCredential().Password
+}
+
+# Make the token request to obtain an access token
+$tokenResponse = Invoke-RestMethod -Uri "https://login.microsoftonline.com/<your-tenant-id>/oauth2/v2.0/token" -Method POST -Headers $authHeader -Body $body
+
+# Extract the access token from the response
+$accessToken = $tokenResponse.access_token
+
+
+------------------------------------
+
 $accessToken = Invoke-RestMethod -Method Get -Headers @{'Metadata'='true'} `
   -Uri "http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://graph.microsoft.com" `
   | Select-Object -ExpandProperty access_token
@@ -153,6 +181,8 @@ $authHeader = @{
 $domainFederationUrl = "https://graph.microsoft.com/v1.0/domains/federationSettings"
 $domainFederationResult = Invoke-RestMethod -Uri $domainFederationUrl -Headers $authHeader -Method Get
 $domainFederationResult
+
+
 
 
 
