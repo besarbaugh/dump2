@@ -1,3 +1,20 @@
+# Connect to Azure AD using the stored credentials
+$creds = Get-AutomationPSCredential -Name "user123"
+Connect-AzureAD -Credential $creds
+
+# Get the domain name for which you want to retrieve federation settings
+$domain = "example.com"
+
+# Get the domain object ID using the Microsoft Graph API
+$domainObj = Invoke-RestMethod -Method Get -Uri "https://graph.microsoft.com/v1.0/domains?$filter=verifiedDomains/any(x:x/Name eq '$domain')" -Headers @{Authorization = "Bearer $((Get-AzureADAccessToken).AccessToken)"}
+
+# Get the federation settings using the Microsoft Graph API
+$federationSettings = Invoke-RestMethod -Method Get -Uri "https://graph.microsoft.com/v1.0/domains/$($domainObj.id)/domainFederationSettings" -Headers @{Authorization = "Bearer $((Get-AzureADAccessToken).AccessToken)"}
+
+# Output the federation settings
+$federationSettings
+
+-----------------------
 # Get the username and password from your Azure Automation account
 $username = "<your-username>"
 $password = Get-AutomationVariable -Name "your-password-name" | ConvertTo-SecureString -AsPlainText -Force
