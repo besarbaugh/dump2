@@ -1,3 +1,25 @@
+# Retrieve the access token using one of the methods described earlier
+$accessToken = "YOUR_ACCESS_TOKEN"
+
+# Set the Graph API endpoint and query string
+$graphEndpoint = "https://graph.microsoft.com/v1.0/identity/conditionalAccess/policies"
+$queryString = "?$filter=conditions.appliedConditionalAccessPolicies.claims.matchedClaims.value eq 'Federated'"
+
+# Set the request headers
+$headers = @{
+    Authorization = "Bearer $accessToken"
+}
+
+# Make the Graph API request to retrieve the conditional access policies
+$response = Invoke-RestMethod -Method Get -Uri "$graphEndpoint$queryString" -Headers $headers
+
+# Extract the federated domain information from the response
+$federatedDomains = $response.conditions.appliedConditionalAccessPolicies.claims.matchedClaims.additionalProperties.values | Where-Object { $_.type -eq "Federated" }
+
+
+
+
+
 # Connect to Azure AD using the stored credentials
 $creds = Get-AutomationPSCredential -Name "user123"
 Connect-AzureAD -Credential $creds
