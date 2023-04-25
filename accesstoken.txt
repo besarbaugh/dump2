@@ -1,3 +1,32 @@
+
+# Replace with your access token
+$accessToken = "<your_access_token_here>"
+
+# Split the JWT into its parts
+$jwtParts = $accessToken.Split('.')
+
+# Get the payload (the middle part)
+$base64UrlPayload = $jwtParts[1]
+
+# Convert Base64Url to Base64
+$base64Payload = $base64UrlPayload.Replace('-', '+').Replace('_', '/')
+$paddingLength = 4 - ($base64Payload.Length % 4)
+if ($paddingLength -ne 4) {
+    $base64Payload = $base64Payload.PadRight($base64Payload.Length + $paddingLength, '=')
+}
+
+# Base64 decode the payload
+$decodedPayloadBytes = [System.Convert]::FromBase64String($base64Payload)
+$decodedPayload = [System.Text.Encoding]::UTF8.GetString($decodedPayloadBytes)
+
+# Display the decoded payload
+Write-Host "Decoded Payload:"
+Write-Host $decodedPayload
+
+
+
+----------------------
+
 # Retrieve the access token using one of the methods described earlier
 $accessToken = "YOUR_ACCESS_TOKEN"
 
