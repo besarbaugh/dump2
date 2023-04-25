@@ -1,4 +1,29 @@
+$DomainName = "<your-domain-name>"
+$FederationSettings = @{
+    issuer = "<your-issuer-uri>"
+    loginEndpoint = "<your-passive-logon-uri>"
+    logoutEndpoint = "<your-logout-endpoint-uri>" # Optional
+    signingCertificate = "<your-base64-encoded-certificate>"
+    metadataExchangeEndpoint = "<your-metadata-exchange-endpoint-uri>" # Optional
+} | ConvertTo-Json
 
+$GraphApiUrl = "https://graph.microsoft.com/v1.0/domains/$DomainName"
+$Headers = @{
+    'Authorization' = "Bearer $AccessToken"
+    'Content-Type' = 'application/json'
+}
+
+$Body = @{
+    authenticationType = "Federated"
+    federatedDomainSettings = $FederationSettings
+} | ConvertTo-Json
+
+# Send the request to update the domain's authentication settings
+$Response = Invoke-RestMethod -Uri $GraphApiUrl -Method PATCH -Headers $Headers -Body $Body
+
+
+
+---------------------------------------------------------
 # Replace with your access token
 $accessToken = "<your_access_token_here>"
 
