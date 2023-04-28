@@ -1,3 +1,15 @@
+
+$automationEndpoint = $env:IDENTITY_ENDPOINT
+$automationToken = $env:IDENTITY_HEADER
+
+$resource = "https://graph.microsoft.com"
+
+$tokenAuthURI = "$($automationEndpoint)?resource=$resource&api-version=2019-08-01"
+$tokenResponse = Invoke-RestMethod -Method Get -Headers @{ 'Secret' = $automationToken } -Uri $tokenAuthURI
+$accessToken = $tokenResponse.access_token
+
+
+-----------------------------------------
 $DomainName = "<your-domain-name>"
 $FederationSettings = @{
     issuer = "<your-issuer-uri>"
