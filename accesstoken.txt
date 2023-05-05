@@ -1,3 +1,14 @@
+$managedIdentity = Get-AzureADServicePrincipal -ObjectId "<ManagedIdentityObjectId>"
+
+$graphAppRoleId = (Get-AzureADServicePrincipal -SearchString "Microsoft Graph").AppRoles[0].Id
+$graphPermissionGrants = Get-AzureADServiceAppRoleAssignment -ObjectId $managedIdentity.ObjectId -All $true | Where-Object { $_.ResourceId -eq "https://graph.microsoft.com" -and $_.AppRoleId -eq $graphAppRoleId }
+
+foreach ($graphPermissionGrant in $graphPermissionGrants) {
+    Remove-AzureADServiceAppRoleAssignment -ObjectId $graphPermissionGrant.ObjectId
+}
+
+
+
 
 $automationEndpoint = $env:IDENTITY_ENDPOINT
 $automationToken = $env:IDENTITY_HEADER
