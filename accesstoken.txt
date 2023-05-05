@@ -3,6 +3,10 @@ $managedIdentity = Get-AzureADServicePrincipal -ObjectId "<ManagedIdentityObject
 $graphAppRoleId = (Get-AzureADServicePrincipal -SearchString "Microsoft Graph").AppRoles[0].Id
 $graphPermissionGrants = Get-AzureADServiceAppRoleAssignment -ObjectId $managedIdentity.ObjectId -All $true | Where-Object { $_.ResourceId -eq "https://graph.microsoft.com" -and $_.AppRoleId -eq $graphAppRoleId }
 
+$graphAppRoleId = (Get-AzureADServicePrincipal -SearchString "Microsoft Graph").AppRoles[0].Id
+$graphPermissionGrants = Get-AzureADApplicationServicePrincipal -All $true | Where-Object { $_.AppRoleAssignments.ResourceId -eq "https://graph.microsoft.com" -and $_.AppRoleAssignments.AppRoleId -eq $graphAppRoleId -and $_.AppRoleAssignments.PrincipalId -eq $managedIdentity.ObjectId }
+
+
 foreach ($graphPermissionGrant in $graphPermissionGrants) {
     Remove-AzureADServiceAppRoleAssignment -ObjectId $graphPermissionGrant.ObjectId
 }
