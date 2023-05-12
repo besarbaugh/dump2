@@ -1,3 +1,46 @@
+# Import ActiveDirectory module if not already loaded
+if (-not (Get-Module -Name ActiveDirectory)) {
+    Import-Module ActiveDirectory
+}
+
+# Define the group name
+$GroupName = "GroupNameHere"
+
+# Get the AD group object
+$Group = Get-ADGroup -Identity $GroupName
+
+# Get the AD group's distinguished name
+$GroupDN = $Group.DistinguishedName
+
+# Get the replication metadata for the group
+$ReplicationMetadata = Get-ADReplicationAttributeMetadata -Object $GroupDN -Server (Get-ADDomainController).Name
+
+# Filter the metadata to get only the 'member' attribute changes
+$MemberChanges = $ReplicationMetadata | Where-Object { $_.AttributeName -eq 'member' }
+
+# Process and output the member changes
+foreach ($Metadata in $MemberChanges) {
+    $Timestamp = $Metadata.LastOriginatingChangeTime
+    $Action = $Metadata.AttributeOperation
+    $UserDN = $Metadata.AttributeValue
+
+    # Get the username from the user's distinguished name
+    $UserName = (Get-ADUser -Identity $UserDN -ErrorAction SilentlyContinue).SamAccountName
+
+    # Output the result if the user exists
+    if ($UserName) {
+        $Output = @{
+            DateTime = $Timestamp
+            Action   = $Action
+            User     = $UserName
+        }
+        New-Object PSObject -Property $Output | Select-Object DateTime, Action, User
+    }
+}
+
+
+
+
 $managedIdentity = Get-AzureADServicePrincipal -ObjectId "<ManagedIdentityObjectId>"
 
 $graphAppRoleId = (Get-AzureADServicePrincipal -SearchString "Microsoft Graph").AppRoles[0].Id
