@@ -1,3 +1,20 @@
+connect-azaccount 
+
+Set-AzContext -SubscriptionId $subscriptionId
+
+# Get the access token from the authenticated session
+$accessToken = (Get-AzContext).TokenCache.ReadItems() | Where-Object { $_.Resource -eq "https://management.azure.com/" } | Select-Object -First 1 -ExpandProperty AccessToken
+
+# Use the access token in your API requests
+$headers = @{
+    "Authorization" = "Bearer $accessToken"
+    "Content-Type" = "application/json"
+}
+
+
+
+
+
 # Import ActiveDirectory module if not already loaded
 if (-not (Get-Module -Name ActiveDirectory)) {
     Import-Module ActiveDirectory
