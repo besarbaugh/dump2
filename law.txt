@@ -56,3 +56,41 @@ let NoLogsData = LastTwoHoursLogs
 
 union JoinedData, NoLogsData
 | project TimeGenerated, Type = iif(isnotempty(FailureIncreasePercentage), "FailureIncrease", "NoLogs")
+
+
+
+
+-------------------
+
+
+
+let LastTwoHours = now() - 2h;
+let Today = trunc(now(), 1d);
+let Yesterday = Today - 1d;
+let TodayFailures = toscalar(
+    AADProvisioningLogs_CL
+    | where TimeGenerated >= Today
+    | where Status == "Failure"
+    | count
+);
+let YesterdayFailures = toscalar(
+    AADProvisioningLogs_CL
+    | where TimeGenerated >= Yesterday and TimeGenerated < Today
+    | where Status == "Failure"
+    | count
+);
+let IncreasePercentage = ((TodayFailures - YesterdayFailures) * 100.0) / YesterdayFailures;
+let NoLogsCondition = 
+    AADProvisioningLogs_CL
+    | where TimeGenerated >= LastTwoHours
+    | summarize TotalLogs = count() by bin(TimeGenerated, 15m)
+    | where TotalLogs == 0;
+
+let IncreaseInFailuresCondition =
+    AADProvisioningLogs_CL
+    | extend IncreasePercentage = todouble(round(IncreasePercentage, 2))
+    | project IncreasePercentage
+    | where IncreasePercentage >= 100;
+
+union NoLogsCondition, IncreaseInFailuresCondition
+| summarize Trigger = iff(count() > 0, true, false)
