@@ -1,0 +1,58 @@
+let LastTwoHoursLogs = AADProvisioningLogs_CL
+    | where TimeGenerated > ago(2h);
+
+let Last24HoursLogs = AADProvisioningLogs_CL
+    | where TimeGenerated > ago(1d);
+
+let Previous24HoursLogs = AADProvisioningLogs_CL
+    | where TimeGenerated > ago(2d) and TimeGenerated <= ago(1d);
+
+let Last24HoursFailures = Last24HoursLogs
+    | where Status == "Failure"
+    | summarize TotalFailures = count() by bin(TimeGenerated, 1h);
+
+let Previous24HoursFailures = Previous24HoursLogs
+    | where Status == "Failure"
+    | summarize TotalFailures = count() by bin(TimeGenerated, 1h);
+
+let JoinedData = Last24HoursFailures
+    | join kind=inner (Previous24HoursFailures) on TimeGenerated
+    | extend FailureIncreasePercentage = ((TotalFailures - TotalFailures1) * 100.0) / TotalFailures1
+    | where FailureIncreasePercentage >= 100;
+
+LastTwoHoursLogs
+| union JoinedData
+| summarize TotalLogs = count() by bin(TimeGenerated, 15m)
+| where TotalLogs == 0
+
+
+----------------------------------------------------------------------------------------------------------
+
+let LastTwoHoursLogs = AADProvisioningLogs_CL
+    | where TimeGenerated > ago(2h);
+
+let Last24HoursLogs = AADProvisioningLogs_CL
+    | where TimeGenerated > ago(1d);
+
+let Previous24HoursLogs = AADProvisioningLogs_CL
+    | where TimeGenerated > ago(2d) and TimeGenerated <= ago(1d);
+
+let Last24HoursFailures = Last24HoursLogs
+    | where Status == "Failure"
+    | summarize TotalFailures = count() by bin(TimeGenerated, 1h);
+
+let Previous24HoursFailures = Previous24HoursLogs
+    | where Status == "Failure"
+    | summarize TotalFailures = count() by bin(TimeGenerated, 1h);
+
+let JoinedData = Last24HoursFailures
+    | join kind=inner (Previous24HoursFailures) on TimeGenerated
+    | extend FailureIncreasePercentage = ((TotalFailures - TotalFailures1) * 100.0) / TotalFailures1
+    | where FailureIncreasePercentage >= 100;
+
+let NoLogsData = LastTwoHoursLogs
+    | summarize TotalLogs = count() by bin(TimeGenerated, 15m)
+    | where TotalLogs == 0;
+
+union JoinedData, NoLogsData
+| project TimeGenerated, Type = iif(isnotempty(FailureIncreasePercentage), "FailureIncrease", "NoLogs")
