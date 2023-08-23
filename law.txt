@@ -161,4 +161,37 @@ union
         true, 
         false
     )
+-------------------------------------
+
+let Last24Hours = now() - 24h;
+let Previous24Hours = Last24Hours - 24h;
+let TodayFailures = toscalar(
+    AADProvisioningLogs
+    | where TimeGenerated >= Last24Hours
+    | where ResultType == "Failure"
+    | count
+);
+let YesterdayFailures = toscalar(
+    AADProvisioningLogs
+    | where TimeGenerated >= Previous24Hours and TimeGenerated < Last24Hours
+    | where ResultType == "Failure"
+    | count
+);
+let IncreasePercentage = ((TodayFailures - YesterdayFailures) * 100.0) / (YesterdayFailures + 0.1);
+
+let NoLogsCondition = 
+    AADProvisioningLogs
+    | where TimeGenerated >= Last24Hours
+    | summarize TotalLogs = count()
+    | extend Trigger = iif(TotalLogs == 0, true, false)
+    | project Trigger;
+
+let IncreaseInFailuresCondition =
+    AADProvisioningLogs
+    | where TimeGenerated >= Last24Hours
+    | extend Trigger = iif(IncreasePercentage >= 100, true, false)
+    | project Trigger;
+
+union NoLogsCondition, IncreaseInFailuresCondition
+| summarize Trigger = max(Trigger)
 
