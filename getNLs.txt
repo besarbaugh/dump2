@@ -7,7 +7,7 @@ $results = @()
 # Iterate through each named location policy
 foreach ($policy in $namedLocationPolicies) {
     $policyName = $policy.DisplayName
-    $cidrRanges = $policy.AllowedDataCenterIPAddresses -join ', '
+    $cidrRanges = $policy.AllowedCidrRanges -join ', '
     
     # Create a custom object for each policy
     $result = [PSCustomObject]@{
@@ -18,3 +18,5 @@ foreach ($policy in $namedLocationPolicies) {
     # Add the custom object to the results array
     $results += $result
 }
+
+$results
