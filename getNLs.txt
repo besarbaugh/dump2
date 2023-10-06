@@ -1,0 +1,20 @@
+# Get all named location policies
+$namedLocationPolicies = Get-AzureADNamedLocationPolicy
+
+# Initialize an empty array to store the results
+$results = @()
+
+# Iterate through each named location policy
+foreach ($policy in $namedLocationPolicies) {
+    $policyName = $policy.DisplayName
+    $cidrRanges = $policy.AllowedDataCenterIPAddresses -join ', '
+    
+    # Create a custom object for each policy
+    $result = [PSCustomObject]@{
+        'DisplayName' = $policyName
+        'CIDRRanges'  = $cidrRanges
+    }
+    
+    # Add the custom object to the results array
+    $results += $result
+}
