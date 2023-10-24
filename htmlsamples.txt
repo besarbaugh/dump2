@@ -1,0 +1,18 @@
+
+# Convert the array of objects into an HTML table with a grid
+$htmlTable = "<table style='border: 1px solid black; border-collapse: collapse;'>"
+$htmlTable += "<tr><th style='border: 1px solid black;'>Property 1</th><th style='border: 1px solid black;'>Property 2</th><th style='border: 1px solid black;'>Property 3</th><th style='border: 1px solid black;'>Property 4</th></tr>"
+foreach ($obj in $objects) {
+    $isFailure = $obj.Property1 -like "*FAILURE*" -or $obj.Property2 -like "*FAILURE*" -or $obj.Property3 -like "*FAILURE*" -or $obj.Property4 -like "*FAILURE*"
+    
+    if ($isFailure) {
+        $htmlTable += "<tr style='color:red;'><td style='border: 1px solid black;'>$($obj.Property1)</td><td style='border: 1px solid black;'>$($obj.Property2)</td><td style='border: 1px solid black;'>$($obj.Property3)</td><td style='border: 1px solid black;'>$($obj.Property4)</td></tr>"
+    }
+    else {
+        $htmlTable += "<tr><td style='border: 1px solid black;'>$($obj.Property1)</td><td style='border: 1px solid black;'>$($obj.Property2)</td><td style='border: 1px solid black;'>$($obj.Property3)</td><td style='border: 1px solid black;'>$($obj.Property4)</td></tr>"
+    }
+}
+$htmlTable += "</table>"
+
+# Short message above the table
+$message = "Below is the table of objects with properties. Rows with 'FAILURE' are highlighted in red."
