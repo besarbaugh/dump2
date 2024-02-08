@@ -1,0 +1,26 @@
+{id} = middleware app reg object id (or maybe client id?)
+
+GET https://graph.microsoft.com/v1.0/servicePrincipals/{id}/oauth2PermissionScopes  
+
+filter this get to find the permission id for user_impersonation 
+
+PATCH https://graph.microsoft.com/v1.0/applications/{id}
+Content-Type: application/json
+
+{
+  "requiredResourceAccess": [
+    {
+      "resourceAppId": "enterprise-application-id",
+      "resourceAccess": [
+        {
+          "id": "user_impersonation permission id",
+          "type": "Scope"
+        }
+      ]
+    }
+  ]
+}
+
+You need to replace enterprise-application-id with the ID of the enterprise application you're delegating from, and delegated-permission-id-for-user_impersonation with the specific ID of the user_impersonation permission for that application. This ID can be found in the enterprise application's manifest or by querying the Microsoft Graph API for the application's permissions.
+
+https://login.microsoftonline.com/{tenant}/adminconsent?client_id={client-id}&state=12345&redirect_uri={redirect-uri}
