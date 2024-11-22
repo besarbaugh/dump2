@@ -1,18 +1,158 @@
+param (
+    [string]$CsvPath,
+    [string]$TenantId,
+    [string]$LogDirectory = ".\Logs",
+    [switch]$Rollback
+)
 
-# Convert the array of objects into an HTML table with a grid
-$htmlTable = "<table style='border: 1px solid black; border-collapse: collapse;'>"
-$htmlTable += "<tr><th style='border: 1px solid black;'>Property 1</th><th style='border: 1px solid black;'>Property 2</th><th style='border: 1px solid black;'>Property 3</th><th style='border: 1px solid black;'>Property 4</th></tr>"
-foreach ($obj in $objects) {
-    $isFailure = $obj.Property1 -like "*FAILURE*" -or $obj.Property2 -like "*FAILURE*" -or $obj.Property3 -like "*FAILURE*" -or $obj.Property4 -like "*FAILURE*"
-    
-    if ($isFailure) {
-        $htmlTable += "<tr style='color:red;'><td style='border: 1px solid black;'>$($obj.Property1)</td><td style='border: 1px solid black;'>$($obj.Property2)</td><td style='border: 1px solid black;'>$($obj.Property3)</td><td style='border: 1px solid black;'>$($obj.Property4)</td></tr>"
-    }
-    else {
-        $htmlTable += "<tr><td style='border: 1px solid black;'>$($obj.Property1)</td><td style='border: 1px solid black;'>$($obj.Property2)</td><td style='border: 1px solid black;'>$($obj.Property3)</td><td style='border: 1px solid black;'>$($obj.Property4)</td></tr>"
+# Ensure the log directory exists
+if (-Not (Test-Path $LogDirectory)) {
+    New-Item -ItemType Directory -Path $LogDirectory | Out-Null
+}
+
+# Timestamped log file
+$timestamp = (Get-Date).ToString("yyyy-MM-dd_HH-mm-ss")
+$logFile = Join-Path $LogDirectory "RoleAssignmentLog_$timestamp.log"
+
+# Verify that the CSV exists
+if (-Not (Test-Path $CsvPath)) {
+    Write-Error "CSV file not found at path: $CsvPath"
+    exit 1
+}
+
+# Import CSV with case-insensitive header matching
+$csvData = Import-Csv -Path $CsvPath | ForEach-Object {
+    $_ | ConvertTo-Json -Depth 1 | ConvertFrom-Json -AsHashtable -CaseInsensitive
+}
+
+# Validate required headers
+$requiredHeaders = @("azureobjectscopeid", "appid", "appdisplayname", "privrole")
+foreach ($header in $requiredHeaders) {
+    if (-Not $csvData[0].ContainsKey($header)) {
+        Write-Error "Missing required header: $header"
+        exit 1
     }
 }
-$htmlTable += "</table>"
 
-# Short message above the table
-$message = "Below is the table of objects with properties. Rows with 'FAILURE' are highlighted in red."
+# Rollback Mode
+if ($Rollback) {
+    Write-Host "Rollback mode initiated. Restoring role assignments from the CSV."
+
+    # Authenticate to Azure if not already logged in
+    if (-Not (Get-AzContext)) {
+        Connect-AzAccount -TenantId $TenantId
+    }
+
+    # Perform rollback
+    foreach ($row in $csvData) {
+        # Extract data
+        $scope = $row["azureobjectscopeid"]
+        $appId = $row["appid"]
+        $appDisplayName = $row["appdisplayname"]
+        $roleDisplayName = $row["privrole"]
+
+        # Retrieve the Service Principal Object ID using AppId
+        $servicePrincipal = Get-AzADServicePrincipal -Filter "AppId eq '$appId'" -ErrorAction SilentlyContinue
+        if (-Not $servicePrincipal) {
+            Write-Warning "Service Principal with AppId '$appId' (AppDisplayName '$appDisplayName') not found. Skipping."
+            continue
+        }
+
+        $objectId = $servicePrincipal.Id
+
+        # Create the role assignment
+        try {
+            New-AzRoleAssignment -ObjectId $objectId -Scope $scope -RoleDefinitionName $roleDisplayName
+            Write-Host "Restored role assignment: Role '$roleDisplayName' at Scope '$scope' for AppId '$appId' (AppDisplayName '$appDisplayName')."
+        } catch {
+            Write-Error "Failed to restore role assignment for AppId '$appId' (AppDisplayName '$appDisplayName'): $_"
+        }
+    }
+    exit 0
+}
+
+# Authenticate to Azure if not already logged in
+if (-Not (Get-AzContext)) {
+    Connect-AzAccount -TenantId $TenantId
+}
+
+# Prepare for logging rollback data
+$logEntries = @()
+
+foreach ($row in $csvData) {
+    # Extract data
+    $scope = $row["azureobjectscopeid"]
+    $appId = $row["appid"]
+    $appDisplayName = $row["appdisplayname"]
+    $roleDisplayName = $row["privrole"]
+
+    # Determine scope type
+    if ($scope -match "^\/providers\/Microsoft.Management\/managementGroups\/") {
+        $scopeType = "ManagementGroup"
+    } elseif ($scope -match "^\/subscriptions\/[^\/]+$") {
+        $scopeType = "Subscription"
+    } elseif ($scope -match "^\/subscriptions\/[^\/]+\/resourceGroups\/[^\/]+$") {
+        $scopeType = "ResourceGroup"
+    } else {
+        Write-Warning "Unrecognized or unsupported scope format: $scope. Skipping entry for AppDisplayName '$appDisplayName'."
+        continue
+    }
+
+    # Set Azure context
+    try {
+        if ($scopeType -eq "ManagementGroup") {
+            Connect-AzAccount -TenantId $TenantId
+            Write-Host "Context set for Management Group scope."
+        } elseif ($scopeType -eq "Subscription") {
+            $subscriptionId = ($scope -split "/")[2]
+            Set-AzContext -SubscriptionId $subscriptionId
+            Write-Host "Context set for Subscription scope: $subscriptionId."
+        } elseif ($scopeType -eq "ResourceGroup") {
+            $subscriptionId = ($scope -split "/")[2]
+            Set-AzContext -SubscriptionId $subscriptionId
+            Write-Host "Context set for Resource Group scope within Subscription: $subscriptionId."
+        }
+    } catch {
+        Write-Warning "Failed to set context for scope: $scope. Skipping entry for AppDisplayName '$appDisplayName'."
+        continue
+    }
+
+    # Retrieve the Service Principal Object ID using AppId
+    $servicePrincipal = Get-AzADServicePrincipal -Filter "AppId eq '$appId'" -ErrorAction SilentlyContinue
+    if (-Not $servicePrincipal) {
+        Write-Warning "Service Principal with AppId '$appId' (AppDisplayName '$appDisplayName') not found. Skipping."
+        continue
+    }
+
+    $objectId = $servicePrincipal.Id
+
+    # Find existing role assignment
+    $roleAssignment = Get-AzRoleAssignment -ObjectId $objectId -Scope $scope -RoleDefinitionName $roleDisplayName -ErrorAction SilentlyContinue
+    if (-Not $roleAssignment) {
+        Write-Warning "No role assignment found for AppId '$appId', Role '$roleDisplayName', Scope '$scope'. Skipping."
+        continue
+    }
+
+    # Remove the role assignment
+    try {
+        Remove-AzRoleAssignment -ObjectId $objectId -Scope $scope -RoleDefinitionName $roleDisplayName -Confirm:$false
+        Write-Host "Successfully removed role assignment for AppId '$appId' (AppDisplayName '$appDisplayName'), Role '$roleDisplayName', Scope '$scope'."
+
+        # Log the removed assignment for rollback
+        $logEntries += [PSCustomObject]@{
+            ObjectId          = $objectId
+            Scope             = $scope
+            RoleDefinitionName = $roleDisplayName
+        }
+    } catch {
+        Write-Error "Failed to remove role assignment for AppId '$appId' (AppDisplayName '$appDisplayName'): $_"
+    }
+}
+
+# Write log entries to file
+if ($logEntries.Count -gt 0) {
+    $logEntries | Export-Csv -Path $logFile -NoTypeInformation
+    Write-Host "Logged removed assignments to $logFile."
+} else {
+    Write-Warning "No assignments were removed, so no log was created."
+}
