@@ -1,15 +1,1 @@
-# Ensure variables are defined
-if (-not $spnObjectId -or -not $RoleDefinitionId -or -not $scopeId) {
-    throw "One or more required variables are missing: spnObjectId, RoleDefinitionId, or scopeId."
-}
-
-# Encode only the parameter values
-$encodedPrincipalId = [uri]::EscapeDataString($spnObjectId)
-$encodedRoleDefinitionId = [uri]::EscapeDataString($RoleDefinitionId)
-$encodedScope = [uri]::EscapeDataString($scopeId)
-
-# Construct the query string
-$roleAssignmentCheckUrl = "$roleAssignmentsUrl?`$filter=principalId eq '$encodedPrincipalId' and roleDefinitionId eq '$encodedRoleDefinitionId' and scope eq '$encodedScope'&api-version=2020-10-01"
-
-# Debugging: Output the constructed URL
-Write-Host "Constructed Role Assignment Check URL: $roleAssignmentCheckUrl"
+"https://management.azure.com/providers/Microsoft.Authorization/roleAssignments
