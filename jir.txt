@@ -1,36 +1,15 @@
-try {
-    # Check if Service Principal exists
-    $spnCheckUrl = "https://graph.microsoft.com/v1.0/servicePrincipals/$spnObjectId"
-    $spnResponse = Invoke-WebRequest -Method Get -Uri $spnCheckUrl -Headers @{ Authorization = "Bearer $AuthToken" } -ContentType "application/json" -ErrorAction Stop
-
-    if ($spnResponse.StatusCode -ne 200) {
-        $message = "Service Principal with Object ID $spnObjectId does not exist."
-        Write-Host $message
-        Write-LogOutput -Message $message -LogFile $LogFile -Severity 'WRN'
-        return
-    }
-
-    # Attempt to delete the role assignment
-    $deleteResponse = Invoke-WebRequest -Method Delete -Uri $url -Headers @{ Authorization = "Bearer $AuthToken" } -ErrorAction Stop
-
-    if ($deleteResponse.StatusCode -eq 204) {
-        $message = "Successfully removed role assignment for Service Principal $spnObjectId at Scope $scopeId."
-        Write-Host $message
-        Write-LogOutput -Message $message -LogFile $LogFile -Severity 'INF'
-    }
-} 
-catch {
-    if ($_.Exception.Response -and $_.Exception.Response.StatusCode -eq 404) {
-        $message = "Role assignment for Service Principal $spnObjectId with Role Definition ID $RoleDefinitionId at Scope $scopeId does not exist."
-        Write-Host $message
-        Write-LogOutput -Message $message -LogFile $LogFile -Severity 'WRN'
-    } elseif ($_.Exception.Response -and $_.Exception.Response.StatusCode -eq 401) {
-        $message = "Unauthorized to unassign role for Service Principal $spnObjectId. Check permissions or token."
-        Write-Host $message
-        Write-LogOutput -Message $message -LogFile $LogFile -Severity 'ERR'
-    } else {
-        $message = "Failed to remove role assignment for Service Principal $spnObjectId at Scope $scopeId. Error: $($_.Exception.Message)"
-        Write-Host $message
-        Write-LogOutput -Message $message -LogFile $LogFile -Severity 'ERR'
-    }
+# Ensure variables are defined
+if (-not $spnObjectId -or -not $RoleDefinitionId -or -not $scopeId) {
+    throw "One or more required variables are missing: spnObjectId, RoleDefinitionId, or scopeId."
 }
+
+# Encode only the parameter values
+$encodedPrincipalId = [uri]::EscapeDataString($spnObjectId)
+$encodedRoleDefinitionId = [uri]::EscapeDataString($RoleDefinitionId)
+$encodedScope = [uri]::EscapeDataString($scopeId)
+
+# Construct the query string
+$roleAssignmentCheckUrl = "$roleAssignmentsUrl?`$filter=principalId eq '$encodedPrincipalId' and roleDefinitionId eq '$encodedRoleDefinitionId' and scope eq '$encodedScope'&api-version=2020-10-01"
+
+# Debugging: Output the constructed URL
+Write-Host "Constructed Role Assignment Check URL: $roleAssignmentCheckUrl"
