@@ -1,29 +1,46 @@
-function Initialize-LogFile {
-    [CmdletBinding()]
-    param (
-        [string]$LogFilePrefix = "roleAssignment_status"  # Default prefix for log files
-    )
+try {
+        # Check if Service Principal exists
+        $spnCheckUrl = "https://graph.microsoft.com/v1.0/servicePrincipals?$filter=appId eq '$spnObjectId'"
+        $spnResponse = Invoke-WebRequest -Method Get -Uri $spnCheckUrl -Headers @{ Authorization = $AuthHeader } -ContentType "application/json" -ErrorAction Stop
 
-    try {
-        # Generate a timestamp for uniqueness
-        $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
+        if ($spnResponse.StatusCode -ne 200 -or ($spnResponse.Content | ConvertFrom-Json).value.Count -eq 0) {
+            $message = "Service Principal with Object ID $spnObjectId does not exist."
+            Write-Host $message
+            Write-LogOutput -Message $message -LogFile $LogFile -Severity 'ERR'
+            throw $message
+        }
 
-        # Create the log file name
-        $logFileName = "$LogFilePrefix-$timestamp.log"
+        # Check if Role Assignment exists
+        $roleCheckUrl = "$roleAssignmentsUrl?$filter=principalId eq '$spnObjectId' and roleDefinitionId eq '$RoleDefinitionId' and scope eq '$scopeId'"
+        $roleCheckResponse = Invoke-WebRequest -Method Get -Uri $roleCheckUrl -Headers @{ Authorization = $AuthHeader } -ContentType "application/json" -ErrorAction Stop
 
-        # Create the file in the current directory
-        $logFilePath = Join-Path -Path (Get-Location) -ChildPath $logFileName
-        $logFile = New-Item -Path $logFilePath -ItemType File -Force -ErrorAction Stop
+        if ($roleCheckResponse.StatusCode -eq 200 -and ($roleCheckResponse.Content | ConvertFrom-Json).value.Count -eq 0) {
+            $message = "Role assignment for Service Principal $spnObjectId with Role Definition ID $RoleDefinitionId at Scope $scopeId does not exist."
+            Write-Host $message
+            Write-LogOutput -Message $message -LogFile $LogFile -Severity 'WRN'
+            return  # Gracefully exit since there's nothing to delete
+        }
 
-        # Write an initial log entry
-        "Log file initialized at $($logFilePath)" | Out-File -FilePath $logFilePath -Append
+        # Proceed with role assignment deletion
+        $roleAssignmentId = ($roleCheckResponse.Content | ConvertFrom-Json).value[0].id
+        $deleteUrl = "$roleAssignmentsUrl/$roleAssignmentId"
 
-        # Return the log file path
-        return $logFilePath
+        $deleteResponse = Invoke-WebRequest -Method Delete -Uri $deleteUrl -Headers @{ Authorization = $AuthHeader } -ErrorAction Stop
+        if ($deleteResponse.StatusCode -eq 204) {
+            $message = "Successfully removed role assignment for Service Principal $spnObjectId at Scope $scopeId."
+            Write-Host $message
+            Write-LogOutput -Message $message -LogFile $LogFile -Severity 'INF'
+        } else {
+            $message = "Unexpected response code ($($deleteResponse.StatusCode)) while removing role assignment."
+            Write-Host $message
+            Write-LogOutput -Message $message -LogFile $LogFile -Severity 'ERR'
+            throw $message
+        }
     }
     catch {
-        # If log file creation fails, throw a terminating error
-        Write-Error "Failed to create log file in the current directory: $_"
-        throw "Log file creation failed. Cannot continue."
+        $message = "Failed to remove role assignment for Service Principal $spnObjectId at Scope $scopeId."
+        Write-Host $message
+        Write-LogOutput -Message $message -LogFile $LogFile -Severity 'ERR'
+        Write-LogOutput -Message $_.Exception.Message -LogFile $LogFile -Severity 'ERR'
+        throw $_
     }
-}
