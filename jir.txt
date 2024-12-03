@@ -1,46 +1,59 @@
+# Check if Service Principal exists
 try {
-        # Check if Service Principal exists
-        $spnCheckUrl = "https://graph.microsoft.com/v1.0/servicePrincipals?$filter=appId eq '$spnObjectId'"
-        $spnResponse = Invoke-WebRequest -Method Get -Uri $spnCheckUrl -Headers @{ Authorization = $AuthHeader } -ContentType "application/json" -ErrorAction Stop
+    $spnCheckUrl = "https://graph.microsoft.com/v1.0/servicePrincipals?$filter=appId eq '$spnObjectId'"
+    $spnResponse = Invoke-WebRequest -Method Get -Uri $spnCheckUrl -Headers @{ Authorization = "$AuthHeader" } -ContentType "application/json" -ErrorAction Stop
 
-        if ($spnResponse.StatusCode -ne 200 -or ($spnResponse.Content | ConvertFrom-Json).value.Count -eq 0) {
-            $message = "Service Principal with Object ID $spnObjectId does not exist."
-            Write-Host $message
-            Write-LogOutput -Message $message -LogFile $LogFile -Severity 'ERR'
-            throw $message
-        }
-
-        # Check if Role Assignment exists
-        $roleCheckUrl = "$roleAssignmentsUrl?$filter=principalId eq '$spnObjectId' and roleDefinitionId eq '$RoleDefinitionId' and scope eq '$scopeId'"
-        $roleCheckResponse = Invoke-WebRequest -Method Get -Uri $roleCheckUrl -Headers @{ Authorization = $AuthHeader } -ContentType "application/json" -ErrorAction Stop
-
-        if ($roleCheckResponse.StatusCode -eq 200 -and ($roleCheckResponse.Content | ConvertFrom-Json).value.Count -eq 0) {
-            $message = "Role assignment for Service Principal $spnObjectId with Role Definition ID $RoleDefinitionId at Scope $scopeId does not exist."
-            Write-Host $message
-            Write-LogOutput -Message $message -LogFile $LogFile -Severity 'WRN'
-            return  # Gracefully exit since there's nothing to delete
-        }
-
-        # Proceed with role assignment deletion
-        $roleAssignmentId = ($roleCheckResponse.Content | ConvertFrom-Json).value[0].id
-        $deleteUrl = "$roleAssignmentsUrl/$roleAssignmentId"
-
-        $deleteResponse = Invoke-WebRequest -Method Delete -Uri $deleteUrl -Headers @{ Authorization = $AuthHeader } -ErrorAction Stop
-        if ($deleteResponse.StatusCode -eq 204) {
-            $message = "Successfully removed role assignment for Service Principal $spnObjectId at Scope $scopeId."
-            Write-Host $message
-            Write-LogOutput -Message $message -LogFile $LogFile -Severity 'INF'
-        } else {
-            $message = "Unexpected response code ($($deleteResponse.StatusCode)) while removing role assignment."
-            Write-Host $message
-            Write-LogOutput -Message $message -LogFile $LogFile -Severity 'ERR'
-            throw $message
-        }
-    }
-    catch {
-        $message = "Failed to remove role assignment for Service Principal $spnObjectId at Scope $scopeId."
+    if ($spnResponse.StatusCode -ne 200 -or ($spnResponse.Content | ConvertFrom-Json).value.Count -eq 0) {
+        $message = "Service Principal with Object ID $spnObjectId does not exist."
         Write-Host $message
         Write-LogOutput -Message $message -LogFile $LogFile -Severity 'ERR'
-        Write-LogOutput -Message $_.Exception.Message -LogFile $LogFile -Severity 'ERR'
-        throw $_
+        throw $message
     }
+}
+catch {
+    $message = "Failed to verify Service Principal existence: $($_.Exception.Message)"
+    Write-Host $message
+    Write-LogOutput -Message $message -LogFile $LogFile -Severity 'ERR'
+    throw $message
+}
+
+# Check if Role Assignment already exists
+try {
+    $roleCheckUrl = "$roleAssignmentsUrl?$filter=principalId eq '$spnObjectId' and roleDefinitionId eq '$RoleDefinitionId' and scope eq '$scopeId'"
+    $roleCheckResponse = Invoke-WebRequest -Method Get -Uri $roleCheckUrl -Headers @{ Authorization = "$AuthHeader" } -ContentType "application/json" -ErrorAction Stop
+
+    if ($roleCheckResponse.StatusCode -eq 200 -and ($roleCheckResponse.Content | ConvertFrom-Json).value.Count -gt 0) {
+        $message = "Role assignment for Service Principal $spnObjectId with Role Definition ID $RoleDefinitionId at Scope $scopeId already exists."
+        Write-Host $message
+        Write-LogOutput -Message $message -LogFile $LogFile -Severity 'WRN'
+        return
+    }
+}
+catch {
+    $message = "Failed to verify Role Assignment existence: $($_.Exception.Message)"
+    Write-Host $message
+    Write-LogOutput -Message $message -LogFile $LogFile -Severity 'ERR'
+    throw $message
+}
+
+# Call the Azure Management API to create the role assignment
+try {
+    $response = Invoke-WebRequest -Method Put -Uri $url -Body $jsonBody -Headers @{ Authorization = "$AuthHeader" } -ContentType "application/json" -Verbose
+    $statuscode = $response.StatusCode
+    if ($statuscode -eq 201) {
+        $message = "Assigned 'User Access Administrator' role to SPN: $spnObjectId for Scope: $scopeId. End Date: $endDate"
+        Write-Host $message
+        Write-LogOutput -Message $message -LogFile $LogFile -Severity 'INF'
+    } else {
+        $message = "Unexpected response code ($statuscode) while assigning role."
+        Write-Host $message
+        Write-LogOutput -Message $message -LogFile $LogFile -Severity 'ERR'
+        throw $message
+    }
+}
+catch {
+    $message = "Failed to create role assignment: $($_.Exception.Message)"
+    Write-Host $message
+    Write-LogOutput -Message $message -LogFile $LogFile -Severity 'ERR'
+    throw $_
+}
