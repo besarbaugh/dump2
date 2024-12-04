@@ -1,1 +1,34 @@
-"https://management.azure.com/providers/Microsoft.Authorization/roleAssignments
+# Ensure the scope and roleAssignmentId are correctly set
+if (-not $scopeId -or -not $roleAssignmentId) {
+    throw "Missing required variables: scopeId or roleAssignmentId."
+}
+
+# Construct the URL
+$url = "https://management.azure.com/$scopeId/providers/Microsoft.Authorization/roleAssignments/$roleAssignmentId?api-version=2020-10-01"
+
+# Debugging: Output the constructed URL
+Write-Host "Constructed Role Assignment Deletion URL: $url"
+
+# Perform the delete request
+try {
+    $response = Invoke-WebRequest -Method Delete -Uri $url -Headers @{ Authorization = "Bearer $AuthHeader" } -ErrorAction Stop
+
+    if ($response.StatusCode -eq 204) {
+        $message = "Successfully removed role assignment for Service Principal $spnObjectId at Scope $scopeId."
+        Write-Host $message
+        Write-LogOutput -Message $message -LogFile $LogFile -Severity 'INF'
+    }
+} catch {
+    $errorMessage = $_.Exception.Message
+
+    if ($_.Exception.Response -and $_.Exception.Response.StatusCode -eq 404) {
+        $message = "Role assignment not found for Service Principal $spnObjectId at Scope $scopeId."
+        Write-Host $message
+        Write-LogOutput -Message $message -LogFile $LogFile -Severity 'WRN'
+    } else {
+        $message = "Failed to remove role assignment. Error: $errorMessage"
+        Write-Host $message
+        Write-LogOutput -Message $message -LogFile $LogFile -Severity 'ERR'
+        throw $_
+    }
+}
