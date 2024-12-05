@@ -1,8 +1,15 @@
-# Check the value of $Operation to handle logic.
-if ($Operation -eq 'create' -and !$PSBoundParameters['DurationInDays']) {
-    throw "DurationInDays is required for the 'create' operation."
-}
-
-if ($Operation -eq 'delete' -and $PSBoundParameters['DurationInDays']) {
-    throw "DurationInDays is not valid for the 'delete' operation."
+# Switch logic based on operation
+switch ($Operation) {
+    'create' {
+        if (!$PSBoundParameters['DurationInDays']) {
+            throw "DurationInDays is required for the 'create' operation."
+        }
+        Write-Output "Creating with a duration of $DurationInDays days."
+    }
+    'delete' {
+        if ($PSBoundParameters['DurationInDays']) {
+            throw "DurationInDays is not allowed for the 'delete' operation."
+        }
+        Write-Output "Deleting. Duration is not required."
+    }
 }
