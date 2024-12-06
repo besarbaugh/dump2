@@ -1,15 +1,66 @@
-# Switch logic based on operation
-switch ($Operation) {
-    'create' {
-        if (!$PSBoundParameters['DurationInDays']) {
-            throw "DurationInDays is required for the 'create' operation."
-        }
-        Write-Output "Creating with a duration of $DurationInDays days."
+$authHeader = @{ Authorization = "Bearer <YourAccessToken>" }  # Replace with a valid access token
+$apiVersion = "2020-10-01"
+
+# Base URI for role assignments
+$roleAssignmentsUri = "https://management.azure.com$scopeId/providers/Microsoft.Authorization/roleAssignments?api-version=$apiVersion"
+
+# Log start of process
+$message = "Searching for role assignments on scope: $scopeId for principal: $spnObjectId and role: $roleDefinitionId"
+Write-Host $message
+Write-LogOutput -Message $message -LogFile $LogFile -Severity 'INF'
+
+try {
+    # Fetch role assignments
+    $response = Invoke-RestMethod -Uri $roleAssignmentsUri `
+        -Method GET `
+        -Headers $authHeader
+
+    # Filter the role assignment
+    $roleAssignment = $response.value | Where-Object {
+        $_.properties.principalId -eq $spnObjectId -and
+        $_.properties.roleDefinitionId -like "*$roleDefinitionId"
     }
-    'delete' {
-        if ($PSBoundParameters['DurationInDays']) {
-            throw "DurationInDays is not allowed for the 'delete' operation."
-        }
-        Write-Output "Deleting. Duration is not required."
+
+    if ($null -eq $roleAssignment) {
+        $message = "No role assignment found for principal: $spnObjectId on scope: $scopeId with role: $roleDefinitionId"
+        Write-Host $message
+        Write-LogOutput -Message $message -LogFile $LogFile -Severity 'WRN'
+        return  # Continue processing the next loop iteration
+    }
+
+    # Extract roleAssignmentId
+    $roleAssignmentId = $roleAssignment.id.Split('/')[-1]
+    $message = "Found role assignment with ID: $roleAssignmentId"
+    Write-Host $message
+    Write-LogOutput -Message $message -LogFile $LogFile -Severity 'INF'
+
+    # Delete the role assignment
+    $deleteUri = "https://management.azure.com$scopeId/providers/Microsoft.Authorization/roleAssignments/$roleAssignmentId?api-version=$apiVersion"
+
+    try {
+        Invoke-RestMethod -Uri $deleteUri `
+            -Method DELETE `
+            -Headers $authHeader
+
+        $message = "Successfully deleted role assignment: $roleAssignmentId"
+        Write-Host $message
+        Write-LogOutput -Message $message -LogFile $LogFile -Severity 'INF'
+    } catch {
+        $message = "Failed to delete role assignment: $roleAssignmentId"
+        Write-Host $message
+        Write-LogOutput -Message $message -LogFile $LogFile -Severity 'ERR'
+        Write-LogOutput -Message $_.Exception.Message -LogFile $LogFile -Severity 'ERR'
+    }
+
+} catch {
+    if ($_.ErrorDetails.Message -match "The Role assignment does not exist.") {
+        $message = "The following role assignment could not be found: 'User Access Administrator' role to SPN: $spnObjectId for Scope: $scopeId."
+        Write-Host $message
+        Write-LogOutput -Message $message -LogFile $LogFile -Severity 'WRN'
+    } else {
+        $message = "Failed to retrieve or process role assignments for SPN: $spnObjectId on Scope: $scopeId"
+        Write-Host $message
+        Write-LogOutput -Message $message -LogFile $LogFile -Severity 'ERR'
+        Write-LogOutput -Message $_.Exception.Message -LogFile $LogFile -Severity 'ERR'
     }
 }
