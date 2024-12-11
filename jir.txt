@@ -1,18 +1,2 @@
-# Step 1: Connect to Azure
-Connect-AzAccount
-
-# Step 2: Get Microsoft Graph Access Token
-$token = (Get-AzAccessToken -ResourceUrl "https://graph.microsoft.com").Token
-
-# Step 3: Define Service Principal and Endpoint
-$servicePrincipalId = "<ServicePrincipalId>"  # Replace with your Service Principal's Object ID
-$url = "https://graph.microsoft.com/v1.0/servicePrincipals/$servicePrincipalId/customSecurityAttributes"
-
-# Step 4: Query Custom Security Attributes
-$response = Invoke-RestMethod -Uri $url -Method Get -Headers @{
-    "Authorization" = "Bearer $token"
-    "Content-Type"  = "application/json"
-}
-
-# Step 5: Output the Response
-$response | ConvertTo-Json -Depth 10
+[System.Net.WebRequest]::DefaultWebProxy = [System.Net.WebRequest]::GetSystemWebProxy()
+[System.Net.WebRequest]::DefaultWebProxy.Credentials = [System.Net.CredentialCache]::DefaultNetworkCredentials
